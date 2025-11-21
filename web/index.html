@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GoPro Live Stream</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+</head>
+  <body>
+    <header>
+      <div class="header-content">
+        <div>
+          <h1>GoPro Live Stream</h1>
+          <p class="subtitle">Ready for private streaming from your GoPro → iPhone app → RTMP ingest.</p>
+        </div>
+        <div class="status offline" id="status">Offline</div>
+      </div>
+    </header>
+
+  <main>
+    <section class="player-card">
+      <div class="player-panel">
+        <video id="player" controls playsinline muted poster=""></video>
+        <div class="hint">Tip: HLS is required (index.m3u8). On iOS Safari the native player is used; on desktop Hls.js is used.</div>
+        <div class="quick-actions">
+          <button type="button" id="pip-btn" class="secondary">Picture-in-Picture</button>
+          <button type="button" id="copy-link-btn" class="secondary">Copy player link</button>
+          <button type="button" id="copy-preview-btn" class="secondary">Copy preview link</button>
+        </div>
+      </div>
+
+      <div class="control-panel">
+        <form id="stream-form">
+          <label for="stream-url">HLS playlist URL</label>
+          <input
+            id="stream-url"
+            name="stream-url"
+            type="url"
+            required
+            placeholder="https://your-domain/live/ogulcan/index.m3u8"
+          />
+          <p class="field-help">Update this to your own CloudFront or ingest server URL. Value is cached locally.</p>
+          <button type="submit">Start Stream</button>
+          <button type="button" id="stop-btn" class="secondary">Stop / Unload</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="diagnostics">
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Player state</div>
+          <div class="metric-value" id="metric-state">Idle</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Resolution</div>
+          <div class="metric-value" id="metric-resolution">-</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Bitrate</div>
+          <div class="metric-value" id="metric-bitrate">-</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Buffered ahead</div>
+          <div class="metric-value" id="metric-buffer">-</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Dropped / Total frames</div>
+          <div class="metric-value" id="metric-frames">-</div>
+        </div>
+      </div>
+      <div class="log">
+        <div class="log-header">
+          <h3>Stream health log</h3>
+          <p class="log-hint">Auto-updates with manifest loads, errors, and Picture-in-Picture.</p>
+        </div>
+        <div id="log-entries" class="log-entries"></div>
+      </div>
+    </section>
+
+    <section class="chat">
+      <div class="chat-header">
+        <div>
+          <h3>Viewer chat (shared)</h3>
+          <p class="chat-hint">Connect to a WebSocket relay so every viewer can post with their name. Falls back to local preview if not connected.</p>
+        </div>
+        <div class="chat-pill" id="chat-pill">Local only</div>
+      </div>
+
+      <div class="chat-config">
+        <div class="chat-config-field">
+          <label for="chat-endpoint">Chat WebSocket URL</label>
+          <input id="chat-endpoint" name="chat-endpoint" type="url" placeholder="wss://your-chat.example.com?room=gopro" />
+          <p class="field-help">Use the included Node relay or your own WebSocket backend. URL is cached locally.</p>
+        </div>
+        <div class="chat-config-field small">
+          <label for="chat-room">Room</label>
+          <input id="chat-room" name="chat-room" type="text" value="gopro" />
+          <p class="field-help">Keeps separate chats for multiple events.</p>
+        </div>
+        <button type="button" class="secondary" id="chat-connect">Connect</button>
+      </div>
+
+      <div id="chat-feed" class="chat-feed" aria-live="polite"></div>
+
+      <form id="chat-form" class="chat-form">
+        <div class="chat-inputs">
+          <input id="chat-name" name="chat-name" type="text" autocomplete="name" placeholder="Your name" required />
+          <input id="chat-message" name="chat-message" type="text" placeholder="Say hi to the stream" required />
+        </div>
+        <div class="chat-actions">
+          <div class="chat-toggle">
+            <input type="checkbox" id="chat-persist" />
+            <label for="chat-persist">Persist locally</label>
+          </div>
+          <button type="button" class="secondary" id="chat-clear">Clear</button>
+          <button type="submit">Send</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="how-to">
+      <div class="how-to-header">
+        <div>
+          <p class="eyebrow">Step-by-step</p>
+          <h3>Go live from your GoPro + iPhone</h3>
+          <p class="chat-hint">Everything you need to stream into the player at the bottom of the page.</p>
+        </div>
+        <div class="status" aria-hidden="true">Guide</div>
+      </div>
+      <ol>
+        <li><strong>Prep ingest:</strong> On your RTMP ingest (Nginx-RTMP), enable HLS at <code>https://YOUR_DOMAIN/live/&lt;channel&gt;/index.m3u8</code>.</li>
+        <li><strong>Point the GoPro:</strong> In GoPro Quik on iPhone → Live → RTMP → Custom, enter <code>rtmp://&lt;SERVER_IP&gt;/live/ogulcan</code> (or your path).</li>
+        <li><strong>Start the feed:</strong> Go live from the GoPro and wait a few HLS fragments.</li>
+        <li><strong>Load the player:</strong> Paste the HLS URL above, click <strong>Start Stream</strong>, and share the page. If the feed stops, hit <strong>Stop / Unload</strong> then start again.</li>
+        <li><strong>Add chat:</strong> Start the included chat relay (or your own), paste its WebSocket URL, and click <strong>Connect</strong> so viewers can post with their name.</li>
+      </ol>
+    </section>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const video = document.getElementById('player');
+    const streamForm = document.getElementById('stream-form');
+    const streamUrlInput = document.getElementById('stream-url');
+    const stopBtn = document.getElementById('stop-btn');
+    const pipBtn = document.getElementById('pip-btn');
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    const copyPreviewBtn = document.getElementById('copy-preview-btn');
+    const logEntries = document.getElementById('log-entries');
+    const chatFeed = document.getElementById('chat-feed');
+    const chatForm = document.getElementById('chat-form');
+    const chatNameInput = document.getElementById('chat-name');
+    const chatMessageInput = document.getElementById('chat-message');
+    const chatPersistToggle = document.getElementById('chat-persist');
+    const chatClearBtn = document.getElementById('chat-clear');
+    const chatPill = document.getElementById('chat-pill');
+    const chatEndpointInput = document.getElementById('chat-endpoint');
+    const chatRoomInput = document.getElementById('chat-room');
+    const chatConnectBtn = document.getElementById('chat-connect');
+    const metricEls = {
+      state: document.getElementById('metric-state'),
+      resolution: document.getElementById('metric-resolution'),
+      bitrate: document.getElementById('metric-bitrate'),
+      buffer: document.getElementById('metric-buffer'),
+      frames: document.getElementById('metric-frames'),
+    };
+
+    const DEFAULT_STREAM = 'https://live.ogulcanaydogan.com/live/ogulcan/index.m3u8';
+    const savedStream = localStorage.getItem('gopro-hls-url');
+    const params = new URLSearchParams(window.location.search);
+    const previewMode = params.get('preview') === 'true';
+    const initialUrl = params.get('hls') || savedStream || DEFAULT_STREAM;
+    let metricsTimer = null;
+    let lastLevel = null;
+    let chatMessages = [];
+    const CHAT_HISTORY_KEY = 'gopro-chat-history';
+    const CHAT_NAME_KEY = 'gopro-chat-name';
+    const CHAT_PERSIST_KEY = 'gopro-chat-persist';
+    const CHAT_ENDPOINT_KEY = 'gopro-chat-endpoint';
+    const CHAT_ROOM_KEY = 'gopro-chat-room';
+    let chatSocket = null;
+    let chatRoom = params.get('chatRoom') || localStorage.getItem(CHAT_ROOM_KEY) || 'gopro';
+    let chatEndpoint = params.get('chat') || localStorage.getItem(CHAT_ENDPOINT_KEY) || '';
+    const chatChannel = 'BroadcastChannel' in window ? new BroadcastChannel('gopro-chat') : null;
+
+    const PREVIEW_POSTER =
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(`
+        <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900">
+          <defs>
+            <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" style="stop-color:#6c5ce7;stop-opacity:1"/>
+              <stop offset="100%" style="stop-color:#00cec9;stop-opacity:1"/>
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grad)"/>
+          <text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="64" fill="#fff" text-anchor="middle" dy="-10">GoPro Live Player</text>
+          <text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="#f0f4ff" text-anchor="middle" dy="40">Preview mode · Stream not loaded</text>
+        </svg>
+      `);
+
+    function setStatus(text, tone = 'offline') {
+      statusEl.textContent = text;
+      statusEl.className = `status ${tone}`;
+    }
+
+    function unloadStream() {
+      if (video.hlsInstance) {
+        video.hlsInstance.destroy();
+        video.hlsInstance = null;
+      }
+      video.src = '';
+      video.pause();
+      setStatus('Offline', 'offline');
+      setMetricState('Idle');
+      stopMetrics();
+      logEvent('Stream unloaded');
+    }
+
+    function startStream(url) {
+      unloadStream();
+      setStatus('Loading…', 'loading');
+      setMetricState('Loading');
+      logEvent(`Loading manifest: ${url}`);
+
+      // iOS Safari has native HLS support; others can use Hls.js
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 60,
+        });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        video.hlsInstance = hls;
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          setStatus('Live', 'live');
+          setMetricState('Live');
+          startMetrics();
+          video.play();
+        });
+        hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+          lastLevel = hls.levels?.[data.level] || null;
+          renderMetrics();
+        });
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            setStatus('Error – check stream URL', 'offline');
+            setMetricState('Error');
+            stopMetrics();
+            logEvent(`Fatal error: ${data.details || 'unknown'}`);
+          }
+        });
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = url;
+        video.addEventListener('loadedmetadata', () => video.play(), { once: true });
+        setMetricState('Live');
+        startMetrics();
+        setStatus('Live', 'live');
+      } else {
+        setStatus('Browser unsupported for HLS', 'offline');
+        setMetricState('Unsupported');
+        stopMetrics();
+      }
+    }
+
+    function setMetricState(value) {
+      metricEls.state.textContent = value;
+    }
+
+    function buildShareLink(preview = false) {
+      const base = `${window.location.origin}${window.location.pathname}`;
+      const url = streamUrlInput.value.trim() || initialUrl;
+      const nextParams = new URLSearchParams();
+      if (url) nextParams.set('hls', url);
+      if (preview) nextParams.set('preview', 'true');
+      if (chatEndpointInput.value) nextParams.set('chat', chatEndpointInput.value);
+      if (chatRoomInput.value) nextParams.set('chatRoom', chatRoomInput.value);
+      return `${base}?${nextParams.toString()}`;
+    }
+
+    async function copyToClipboard(text, label) {
+      if (!navigator.clipboard) {
+        logEvent('Clipboard API unavailable in this browser.');
+        return;
+      }
+      await navigator.clipboard.writeText(text);
+      logEvent(`${label} copied to clipboard.`);
+    }
+
+    function getBufferedAhead() {
+      const { buffered, currentTime } = video;
+      for (let i = 0; i < buffered.length; i += 1) {
+        if (buffered.start(i) <= currentTime && buffered.end(i) >= currentTime) {
+          return Math.max(buffered.end(i) - currentTime, 0).toFixed(1);
+        }
+      }
+      return '0.0';
+    }
+
+    function renderMetrics() {
+      const playbackQuality = video.getVideoPlaybackQuality?.();
+      const dropped = playbackQuality?.droppedVideoFrames ?? video.webkitDroppedFrameCount ?? 0;
+      const total = playbackQuality?.totalVideoFrames ?? video.webkitDecodedFrameCount ?? 0;
+
+      const resolution = lastLevel?.width && lastLevel?.height
+        ? `${lastLevel.width}×${lastLevel.height}`
+        : '-';
+      const bitrate = lastLevel?.bitrate ? `${Math.round(lastLevel.bitrate / 1000)} kbps` : '-';
+
+      metricEls.resolution.textContent = resolution;
+      metricEls.bitrate.textContent = bitrate;
+      metricEls.buffer.textContent = `${getBufferedAhead()}s`;
+      metricEls.frames.textContent = total ? `${dropped} / ${total}` : `${dropped} / -`;
+    }
+
+    function startMetrics() {
+      stopMetrics();
+      renderMetrics();
+      metricsTimer = window.setInterval(renderMetrics, 1500);
+    }
+
+    function stopMetrics() {
+      if (metricsTimer) {
+        window.clearInterval(metricsTimer);
+        metricsTimer = null;
+      }
+      lastLevel = null;
+      metricEls.resolution.textContent = '-';
+      metricEls.bitrate.textContent = '-';
+      metricEls.buffer.textContent = '-';
+      metricEls.frames.textContent = '-';
+    }
+
+    function logEvent(text) {
+      if (!logEntries) return;
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `${timestamp} · ${text}`;
+      logEntries.prepend(entry);
+      while (logEntries.children.length > 8) {
+        logEntries.removeChild(logEntries.lastChild);
+      }
+    }
+
+    function updateChatPill(mode = 'local', hint = '') {
+      chatPill.className = 'chat-pill';
+      if (mode === 'connected') {
+        chatPill.textContent = hint ? `Live chat · ${hint}` : 'Live chat';
+        chatPill.classList.add('live');
+      } else if (mode === 'connecting') {
+        chatPill.textContent = 'Connecting…';
+      } else {
+        chatPill.textContent = chatPersistToggle.checked ? 'Local (saved)' : 'Local only';
+      }
+    }
+
+    function connectChatSocket(endpoint, room) {
+      if (chatSocket) {
+        chatSocket.close();
+        chatSocket = null;
+      }
+
+      if (!endpoint) {
+        updateChatPill('local');
+        logEvent('Chat is local-only. Add a WebSocket URL to share across viewers.');
+        return;
+      }
+
+      try {
+        const url = new URL(endpoint);
+        if (!url.searchParams.has('room')) {
+          url.searchParams.set('room', room);
+        }
+        const wsUrl = url.toString();
+        updateChatPill('connecting');
+        chatSocket = new WebSocket(wsUrl);
+
+        chatSocket.onopen = () => {
+          updateChatPill('connected', `room ${room}`);
+          logEvent(`Chat connected: ${wsUrl}`);
+        };
+
+        chatSocket.onerror = () => {
+          updateChatPill('local');
+          logEvent('Chat connection error; fell back to local.');
+        };
+
+        chatSocket.onclose = () => {
+          updateChatPill('local');
+          logEvent('Chat disconnected; messages stay local.');
+        };
+
+        chatSocket.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'chat-message' && data.room === room) {
+              addChatMessage(data.text, data.name, data.ts, { persist: true, broadcast: false, fromSocket: true });
+            }
+          } catch (err) {
+            /* ignore malformed */
+          }
+        };
+      } catch (err) {
+        logEvent('Invalid WebSocket URL for chat.');
+        updateChatPill('local');
+      }
+    }
+
+    function loadChatSettings() {
+      const persisted = localStorage.getItem(CHAT_PERSIST_KEY) === 'true';
+      chatPersistToggle.checked = persisted;
+      const savedName = localStorage.getItem(CHAT_NAME_KEY);
+      if (savedName) chatNameInput.value = savedName;
+      chatRoomInput.value = chatRoom;
+      if (chatEndpoint) {
+        chatEndpointInput.value = chatEndpoint;
+      }
+
+      if (persisted) {
+        const savedMessages = localStorage.getItem(CHAT_HISTORY_KEY);
+        if (savedMessages) {
+          try {
+            chatMessages = JSON.parse(savedMessages);
+          } catch (err) {
+            chatMessages = [];
+          }
+        }
+      }
+      renderChat();
+      updateChatPill(chatEndpoint ? 'connecting' : 'local');
+      connectChatSocket(chatEndpoint, chatRoom);
+    }
+
+    function saveChat() {
+      if (chatPersistToggle.checked) {
+        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatMessages.slice(-80)));
+        localStorage.setItem(CHAT_PERSIST_KEY, 'true');
+      } else {
+        localStorage.removeItem(CHAT_HISTORY_KEY);
+        localStorage.setItem(CHAT_PERSIST_KEY, 'false');
+      }
+      localStorage.setItem(CHAT_ENDPOINT_KEY, chatEndpoint || '');
+      localStorage.setItem(CHAT_ROOM_KEY, chatRoom);
+    }
+
+    function addChatMessage(text, author, timestamp = new Date().toISOString(), options = {}) {
+      const { persist = true, broadcast = true, fromSocket = false } = options;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const name = author?.trim() || 'Viewer';
+      const message = {
+        id: crypto.randomUUID(),
+        name,
+        text: trimmed,
+        ts: timestamp,
+        room: chatRoom,
+      };
+      chatMessages.push(message);
+      chatMessages = chatMessages.slice(-80);
+      renderChat();
+      if (persist) saveChat();
+      if (broadcast && chatChannel) {
+        chatChannel.postMessage(message);
+      }
+      if (broadcast && chatSocket && chatSocket.readyState === WebSocket.OPEN && !fromSocket) {
+        chatSocket.send(JSON.stringify({ type: 'chat-message', ...message }));
+      }
+    }
+
+    function renderChat() {
+      if (!chatFeed) return;
+      chatFeed.innerHTML = '';
+      chatMessages.forEach((msg) => {
+        const row = document.createElement('div');
+        row.className = 'chat-row';
+        const time = new Date(msg.ts).toLocaleTimeString();
+        row.innerHTML = `<span class="chat-name">${msg.name}</span><span class="chat-text">${msg.text}</span><span class="chat-time">${time}</span>`;
+        chatFeed.appendChild(row);
+      });
+      chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
+
+    function clearChat() {
+      chatMessages = [];
+      renderChat();
+      saveChat();
+    }
+
+    streamForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const url = streamUrlInput.value.trim();
+      if (!url) return;
+      localStorage.setItem('gopro-hls-url', url);
+      startStream(url);
+    });
+
+    stopBtn.addEventListener('click', () => {
+      unloadStream();
+    });
+
+    pipBtn.addEventListener('click', async () => {
+      if (!document.pictureInPictureEnabled || !video.requestPictureInPicture) {
+        logEvent('Picture-in-Picture is not supported in this browser.');
+        return;
+      }
+
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+        logEvent('Exited Picture-in-Picture.');
+        return;
+      }
+
+      if (video.paused) {
+        await video.play();
+      }
+      await video.requestPictureInPicture();
+      logEvent('Entered Picture-in-Picture.');
+    });
+
+    copyLinkBtn.addEventListener('click', () => {
+      const link = buildShareLink(false);
+      copyToClipboard(link, 'Player link');
+    });
+
+    copyPreviewBtn.addEventListener('click', () => {
+      const link = buildShareLink(true);
+      copyToClipboard(link, 'Preview link');
+    });
+
+    chatForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const name = chatNameInput.value || 'Viewer';
+      const text = chatMessageInput.value;
+      localStorage.setItem(CHAT_NAME_KEY, name);
+      addChatMessage(text, name);
+      chatMessageInput.value = '';
+      chatMessageInput.focus();
+    });
+
+    chatConnectBtn.addEventListener('click', () => {
+      chatEndpoint = chatEndpointInput.value.trim();
+      chatRoom = chatRoomInput.value.trim() || 'gopro';
+      saveChat();
+      connectChatSocket(chatEndpoint, chatRoom);
+    });
+
+    chatClearBtn.addEventListener('click', () => {
+      clearChat();
+    });
+
+    chatPersistToggle.addEventListener('change', () => {
+      updateChatPill();
+      saveChat();
+    });
+
+    if (chatChannel) {
+      chatChannel.onmessage = (event) => {
+        const incoming = event.data;
+        addChatMessage(incoming.text, incoming.name, incoming.ts, { persist: chatPersistToggle.checked, broadcast: false });
+      };
+    } else {
+      window.addEventListener('storage', (event) => {
+        if (event.key === CHAT_HISTORY_KEY && event.newValue) {
+          try {
+            chatMessages = JSON.parse(event.newValue);
+            renderChat();
+          } catch (err) {
+            /* noop */
+          }
+        }
+      });
+    }
+
+    streamUrlInput.value = initialUrl;
+
+    if (previewMode) {
+      video.poster = PREVIEW_POSTER;
+      setStatus('Preview', 'preview');
+      setMetricState('Preview');
+      logEvent('Preview mode active; stream not loaded.');
+    } else {
+      // Auto-start on load for convenience
+      startStream(initialUrl);
+    }
+
+    loadChatSettings();
+  </script>
+</body>
+</html>
