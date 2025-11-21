@@ -1,0 +1,13 @@
+{
+  "name": "gopro-live-stream",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "preview": "node scripts/generate-preview.mjs",
+    "chat-server": "node scripts/chat-relay.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.44.0",
+    "ws": "^8.17.0"
+  }
+}
