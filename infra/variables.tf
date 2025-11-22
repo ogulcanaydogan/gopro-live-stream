@@ -41,3 +41,34 @@ variable "mime_types" {
     "styles.css" = "text/css"
   }
 }
+
+# RTMP Server Variables
+variable "deploy_rtmp_server" {
+  description = "Whether to deploy the RTMP ingest server"
+  type        = bool
+  default     = false
+}
+
+variable "ami_id" {
+  description = "AMI ID for the RTMP server (Ubuntu 22.04 or Amazon Linux 2023)"
+  type        = string
+  default     = "ami-0c7217cdde317cfec" # Ubuntu 22.04 LTS in us-east-1
+}
+
+variable "instance_type" {
+  description = "EC2 instance type for RTMP server"
+  type        = string
+  default     = "t3.small"
+}
+
+variable "key_name" {
+  description = "EC2 key pair name for SSH access"
+  type        = string
+  default     = ""
+}
+
+variable "ssh_cidr_blocks" {
+  description = "CIDR blocks allowed to SSH to the RTMP server"
+  type        = list(string)
+  default     = ["0.0.0.0/0"] # Restrict this in production!
+}
