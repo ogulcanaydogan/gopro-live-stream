@@ -175,6 +175,7 @@
     const initialUrl = params.get('hls') || savedStream || DEFAULT_STREAM;
     let metricsTimer = null;
     let lastLevel = null;
+    let lastBandwidth = null;
     let chatMessages = [];
     const CHAT_HISTORY_KEY = 'gopro-chat-history';
     const CHAT_NAME_KEY = 'gopro-chat-name';
@@ -236,7 +237,11 @@
         hls.loadSource(url);
         hls.attachMedia(video);
         video.hlsInstance = hls;
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+          // Set initial level info immediately
+          if (hls.levels && hls.levels.length > 0) {
+            lastLevel = hls.levels[hls.currentLevel] || hls.levels[0];
+          }
           setStatus('Live', 'live');
           setMetricState('Live');
           startMetrics();
@@ -245,6 +250,24 @@
         hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
           lastLevel = hls.levels?.[data.level] || null;
           renderMetrics();
+        });
+        hls.on(Hls.Events.LEVEL_LOADED, (_, data) => {
+          // Update level info when level details are loaded
+          if (hls.levels && hls.levels[data.level]) {
+            lastLevel = hls.levels[data.level];
+            renderMetrics();
+          }
+        });
+        hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
+          // Calculate real-time bandwidth from fragment load stats
+          if (data.frag && data.frag.stats) {
+            const stats = data.frag.stats;
+            const loadTime = stats.loading.end - stats.loading.start;
+            if (loadTime > 0 && stats.total > 0) {
+              const bps = (stats.total * 8) / (loadTime / 1000);
+              lastBandwidth = Math.round(bps);
+            }
+          }
         });
         hls.on(Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
@@ -308,11 +331,18 @@
 
       const resolution = lastLevel?.width && lastLevel?.height
         ? `${lastLevel.width}×${lastLevel.height}`
-        : '-';
-      const bitrate = lastLevel?.bitrate ? `${Math.round(lastLevel.bitrate / 1000)} kbps` : '-';
+        : (video.videoWidth && video.videoHeight ? `${video.videoWidth}×${video.videoHeight}` : '-');
+
+      // Use manifest bitrate if available, otherwise use measured bandwidth
+      let bitrateStr = '-';
+      if (lastLevel?.bitrate) {
+        bitrateStr = `${Math.round(lastLevel.bitrate / 1000)} kbps`;
+      } else if (lastBandwidth) {
+        bitrateStr = `~${Math.round(lastBandwidth / 1000)} kbps`;
+      }
 
       metricEls.resolution.textContent = resolution;
-      metricEls.bitrate.textContent = bitrate;
+      metricEls.bitrate.textContent = bitrateStr;
       metricEls.buffer.textContent = `${getBufferedAhead()}s`;
       metricEls.frames.textContent = total ? `${dropped} / ${total}` : `${dropped} / -`;
     }
@@ -329,6 +359,7 @@
         metricsTimer = null;
       }
       lastLevel = null;
+      lastBandwidth = null;
       metricEls.resolution.textContent = '-';
       metricEls.bitrate.textContent = '-';
       metricEls.buffer.textContent = '-';
