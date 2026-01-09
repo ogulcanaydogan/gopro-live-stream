@@ -103,3 +103,9 @@ variable "admin_email" {
   type        = string
   default     = ""
 }
+
+variable "cors_allowed_origin" {
+  description = "Allowed origin for CORS (e.g., https://live.example.com). Use * for public access."
+  type        = string
+  default     = "*"
+}

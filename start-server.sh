@@ -434,8 +434,43 @@ sudo systemctl restart nginx
 echo "✅ SSL configured successfully!"
 ENDSSH
 
+# Health check - verify services are running
 echo ""
-echo "✅ Server is ready!"
+echo "🔍 Running health checks..."
+
+HEALTH_OK=true
+
+# Check HTTPS endpoint
+if curl -sf --max-time 10 "https://$RTMP_DOMAIN/stat" > /dev/null 2>&1; then
+    echo "   ✅ HTTPS working"
+else
+    echo "   ❌ HTTPS not responding"
+    HEALTH_OK=false
+fi
+
+# Check RTMP port
+if nc -z -w5 "$RTMP_DOMAIN" 1935 2>/dev/null; then
+    echo "   ✅ RTMP port open"
+else
+    echo "   ❌ RTMP port not accessible"
+    HEALTH_OK=false
+fi
+
+# Check chat server
+if curl -sf --max-time 5 -o /dev/null -w "%{http_code}" "https://$RTMP_DOMAIN/chat" 2>/dev/null | grep -q "400\|101"; then
+    echo "   ✅ Chat server running"
+else
+    echo "   ⚠️  Chat server may not be ready (this is OK)"
+fi
+
+if [ "$HEALTH_OK" = true ]; then
+    echo ""
+    echo "✅ Server is ready!"
+else
+    echo ""
+    echo "⚠️  Server started but some checks failed. It may need a minute to fully initialize."
+fi
+
 echo ""
 echo "📋 Your URLs:"
 echo "   RTMP: rtmp://$RTMP_DOMAIN/live/$STREAM_KEY"

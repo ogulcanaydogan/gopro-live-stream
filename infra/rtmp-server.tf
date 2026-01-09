@@ -297,7 +297,7 @@ resource "aws_route53_record" "rtmp_server" {
   zone_id = var.route53_zone_id
   name    = var.rtmp_domain_name
   type    = "A"
-  ttl     = 60 # Short TTL for faster updates
+  ttl     = 300 # 5 minute TTL balances update speed and DNS query costs
   records = [aws_instance.rtmp_server[0].public_ip]
 }
 
