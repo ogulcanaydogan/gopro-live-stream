@@ -39,7 +39,7 @@
             name="stream-url"
             type="url"
             required
-            placeholder="https://stream.ogulcanaydogan.com/hls/ogulcan.m3u8"
+            placeholder="https://your-server.com/hls/stream-key.m3u8"
           />
           <p class="field-help">Update this to your own CloudFront or ingest server URL. Value is cached locally.</p>
           <button type="submit">Start Stream</button>
@@ -92,7 +92,7 @@
       <div class="chat-config">
         <div class="chat-config-field">
           <label for="chat-endpoint">Chat WebSocket URL</label>
-          <input id="chat-endpoint" name="chat-endpoint" type="url" placeholder="wss://stream.ogulcanaydogan.com/chat" />
+          <input id="chat-endpoint" name="chat-endpoint" type="url" placeholder="wss://your-server.com/chat" />
           <p class="field-help">Auto-connects to the stream server chat. Change for custom backend.</p>
         </div>
         <div class="chat-config-field small">
@@ -168,10 +168,16 @@
       frames: document.getElementById('metric-frames'),
     };
 
-    const DEFAULT_STREAM = 'https://stream.ogulcanaydogan.com/hls/gopro.m3u8';
-    const DEFAULT_CHAT = 'wss://stream.ogulcanaydogan.com/chat';
-    const savedStream = localStorage.getItem('gopro-hls-url');
+    // Auto-detect stream server from URL params or derive from current host
     const params = new URLSearchParams(window.location.search);
+    const streamServer = params.get('server') || localStorage.getItem('gopro-stream-server') || '';
+    const streamKey = params.get('key') || localStorage.getItem('gopro-stream-key') || 'gopro';
+
+    // Build default URLs - empty if no server configured (user must enter manually)
+    const DEFAULT_STREAM = streamServer ? `https://${streamServer}/hls/${streamKey}.m3u8` : '';
+    const DEFAULT_CHAT = streamServer ? `wss://${streamServer}/chat` : '';
+
+    const savedStream = localStorage.getItem('gopro-hls-url');
     const previewMode = params.get('preview') === 'true';
     const initialUrl = params.get('hls') || savedStream || DEFAULT_STREAM;
     let metricsTimer = null;
@@ -279,11 +285,21 @@
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        // iOS Safari native HLS - wait for video to actually play before showing live status
         video.src = url;
         video.addEventListener('loadedmetadata', () => video.play(), { once: true });
-        setMetricState('Live');
-        startMetrics();
-        setStatus('Live', 'live');
+        video.addEventListener('playing', () => {
+          setMetricState('Live');
+          startMetrics();
+          setStatus('Live', 'live');
+          logEvent('Stream started (native HLS)');
+        }, { once: true });
+        video.addEventListener('error', () => {
+          setStatus('Error – check stream URL', 'offline');
+          setMetricState('Error');
+          stopMetrics();
+          logEvent('Stream error (native HLS)');
+        }, { once: true });
       } else {
         setStatus('Browser unsupported for HLS', 'offline');
         setMetricState('Unsupported');
@@ -538,6 +554,14 @@
       const url = streamUrlInput.value.trim();
       if (!url) return;
       localStorage.setItem('gopro-hls-url', url);
+      // Extract and save server for future auto-config
+      try {
+        const urlObj = new URL(url);
+        localStorage.setItem('gopro-stream-server', urlObj.host);
+        // Extract stream key from path (e.g., /hls/gopro.m3u8 -> gopro)
+        const match = urlObj.pathname.match(/\/hls\/([^.]+)/);
+        if (match) localStorage.setItem('gopro-stream-key', match[1]);
+      } catch (e) { /* ignore parse errors */ }
       startStream(url);
     });
 
