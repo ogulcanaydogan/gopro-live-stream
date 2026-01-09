@@ -4,6 +4,7 @@
 *.tfstate.*
 *.tfvars
 *.tfvars.json
+!*.tfvars.example
 crash.log
 crash.*.log
 override.tf
@@ -12,14 +13,29 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+*.tfplan
 
-# SSH Keys
+# SSH Keys & Credentials
 *.pem
 *.key
+*.pub
+credentials*
+secrets*
+
+# AWS
+.aws/
+aws-credentials*
+
+# Environment
+.env
+.env.*
+!.env.example
 
 # OS
 .DS_Store
 Thumbs.db
+Desktop.ini
+._*
 
 # IDE
 .vscode/
@@ -27,11 +43,35 @@ Thumbs.db
 *.swp
 *.swo
 *~
+*.sublime-*
 
 # Node
 node_modules/
 npm-debug.log*
+yarn-error.log*
 package-lock.json
+yarn.lock
+
+# Logs
+logs/
+*.log
+
+# Test & Coverage
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# Build artifacts
+dist/
+build/
+out/
+
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
 
 # Python
 __pycache__/
@@ -41,3 +81,8 @@ __pycache__/
 .Python
 venv/
 env/
+.venv/
+
+# Local config
+*.local
+config.local.*
