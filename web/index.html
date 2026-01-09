@@ -92,8 +92,8 @@
       <div class="chat-config">
         <div class="chat-config-field">
           <label for="chat-endpoint">Chat WebSocket URL</label>
-          <input id="chat-endpoint" name="chat-endpoint" type="url" placeholder="wss://your-chat.example.com?room=gopro" />
-          <p class="field-help">Use the included Node relay or your own WebSocket backend. URL is cached locally.</p>
+          <input id="chat-endpoint" name="chat-endpoint" type="url" placeholder="wss://stream.ogulcanaydogan.com/chat" />
+          <p class="field-help">Auto-connects to the stream server chat. Change for custom backend.</p>
         </div>
         <div class="chat-config-field small">
           <label for="chat-room">Room</label>
@@ -168,7 +168,8 @@
       frames: document.getElementById('metric-frames'),
     };
 
-    const DEFAULT_STREAM = 'https://stream.ogulcanaydogan.com/hls/ogulcan.m3u8';
+    const DEFAULT_STREAM = 'https://stream.ogulcanaydogan.com/hls/gopro.m3u8';
+    const DEFAULT_CHAT = 'wss://stream.ogulcanaydogan.com/chat';
     const savedStream = localStorage.getItem('gopro-hls-url');
     const params = new URLSearchParams(window.location.search);
     const previewMode = params.get('preview') === 'true';
@@ -184,7 +185,7 @@
     const CHAT_ROOM_KEY = 'gopro-chat-room';
     let chatSocket = null;
     let chatRoom = params.get('chatRoom') || localStorage.getItem(CHAT_ROOM_KEY) || 'gopro';
-    let chatEndpoint = params.get('chat') || localStorage.getItem(CHAT_ENDPOINT_KEY) || '';
+    let chatEndpoint = params.get('chat') || localStorage.getItem(CHAT_ENDPOINT_KEY) || DEFAULT_CHAT;
     const chatChannel = 'BroadcastChannel' in window ? new BroadcastChannel('gopro-chat') : null;
 
     const PREVIEW_POSTER =

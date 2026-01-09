@@ -249,9 +249,180 @@ http {
         location /stat.xsl {
             root /usr/share/nginx/html;
         }
+
+        # WebSocket chat proxy
+        location /chat {
+            proxy_pass http://127.0.0.1:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_read_timeout 86400;
+        }
     }
 }
 EOF
+
+# Install Node.js and setup chat server
+echo "💬 Setting up chat server..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - > /dev/null 2>&1
+sudo apt-get install -y nodejs > /dev/null 2>&1
+
+# Create chat server
+sudo mkdir -p /opt/chat
+sudo tee /opt/chat/server.js > /dev/null << 'CHATEOF'
+const http = require('http');
+const crypto = require('crypto');
+
+const server = http.createServer();
+const clients = new Map(); // room -> Set of sockets
+const recentMessages = new Map(); // room -> array of last 50 messages
+
+function broadcast(room, message, excludeSocket = null) {
+  const roomClients = clients.get(room);
+  if (!roomClients) return;
+  const data = JSON.stringify(message);
+  for (const client of roomClients) {
+    if (client !== excludeSocket && client.readyState === 1) {
+      client.send(data);
+    }
+  }
+}
+
+server.on('upgrade', (req, socket) => {
+  const url = new URL(req.url, 'http://localhost');
+  const room = url.searchParams.get('room') || 'default';
+
+  // WebSocket handshake
+  const key = req.headers['sec-websocket-key'];
+  const accept = crypto.createHash('sha1')
+    .update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+    .digest('base64');
+
+  socket.write([
+    'HTTP/1.1 101 Switching Protocols',
+    'Upgrade: websocket',
+    'Connection: Upgrade',
+    `Sec-WebSocket-Accept: ${accept}`,
+    '', ''
+  ].join('\r\n'));
+
+  socket.readyState = 1;
+  socket.room = room;
+
+  // Add to room
+  if (!clients.has(room)) clients.set(room, new Set());
+  clients.get(room).add(socket);
+
+  // Send recent messages
+  const recent = recentMessages.get(room) || [];
+  for (const msg of recent) {
+    socket.send(JSON.stringify(msg));
+  }
+
+  // Handle incoming messages
+  socket.on('data', (buffer) => {
+    try {
+      // Simple WebSocket frame parsing
+      const firstByte = buffer[0];
+      const opcode = firstByte & 0x0f;
+      if (opcode === 8) { socket.end(); return; } // Close frame
+      if (opcode !== 1) return; // Only text frames
+
+      const secondByte = buffer[1];
+      const isMasked = (secondByte & 0x80) !== 0;
+      let payloadLength = secondByte & 0x7f;
+      let offset = 2;
+
+      if (payloadLength === 126) {
+        payloadLength = buffer.readUInt16BE(2);
+        offset = 4;
+      } else if (payloadLength === 127) {
+        payloadLength = Number(buffer.readBigUInt64BE(2));
+        offset = 10;
+      }
+
+      let payload = buffer.slice(offset + (isMasked ? 4 : 0), offset + (isMasked ? 4 : 0) + payloadLength);
+      if (isMasked) {
+        const mask = buffer.slice(offset, offset + 4);
+        for (let i = 0; i < payload.length; i++) {
+          payload[i] ^= mask[i % 4];
+        }
+      }
+
+      const message = JSON.parse(payload.toString());
+      if (message.type === 'chat-message' && message.text && message.name) {
+        const chatMsg = {
+          type: 'chat-message',
+          id: crypto.randomUUID(),
+          name: message.name.slice(0, 50),
+          text: message.text.slice(0, 500),
+          ts: new Date().toISOString(),
+          room: room
+        };
+
+        // Store in recent messages
+        if (!recentMessages.has(room)) recentMessages.set(room, []);
+        const roomMessages = recentMessages.get(room);
+        roomMessages.push(chatMsg);
+        if (roomMessages.length > 50) roomMessages.shift();
+
+        // Broadcast to all in room
+        broadcast(room, chatMsg);
+      }
+    } catch (e) { /* ignore parse errors */ }
+  });
+
+  socket.on('close', () => {
+    socket.readyState = 3;
+    const roomClients = clients.get(room);
+    if (roomClients) {
+      roomClients.delete(socket);
+      if (roomClients.size === 0) clients.delete(room);
+    }
+  });
+
+  socket.on('error', () => socket.end());
+
+  // Send helper for WebSocket frames
+  socket.send = (data) => {
+    const payload = Buffer.from(data);
+    const frame = Buffer.alloc(2 + payload.length);
+    frame[0] = 0x81; // text frame
+    frame[1] = payload.length;
+    payload.copy(frame, 2);
+    socket.write(frame);
+  };
+});
+
+server.listen(3000, '127.0.0.1', () => {
+  console.log('Chat server running on port 3000');
+});
+CHATEOF
+
+# Create systemd service for chat
+sudo tee /etc/systemd/system/chat.service > /dev/null << 'SVCEOF'
+[Unit]
+Description=WebSocket Chat Server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/chat
+ExecStart=/usr/bin/node /opt/chat/server.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable chat
+sudo systemctl start chat
+echo "✅ Chat server started"
 
 # Enable automatic certificate renewal
 sudo systemctl enable certbot.timer
@@ -269,5 +440,6 @@ echo ""
 echo "📋 Your URLs:"
 echo "   RTMP: rtmp://$RTMP_DOMAIN/live/$STREAM_KEY"
 echo "   HLS:  https://$RTMP_DOMAIN/hls/$STREAM_KEY.m3u8"
+echo "   Chat: wss://$RTMP_DOMAIN/chat?room=gopro"
 echo ""
 echo "🎥 Ready to stream from your GoPro!"
