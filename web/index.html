@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: https:; connect-src 'self' wss: https:; frame-ancestors 'self';" />
   <title>GoPro Live Stream</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js" integrity="sha384-bTsfl1fBwxqLkUCM8NJfn8+X7JUnRrUp6s7E9UwM3WPQZHh/BLvNjZ1dT/3xA9Tw" crossorigin="anonymous"></script>
 </head>
   <body>
     <header>
@@ -38,7 +39,7 @@
             name="stream-url"
             type="url"
             required
-            placeholder="https://your-domain/live/ogulcan/index.m3u8"
+            placeholder="https://stream.ogulcanaydogan.com/hls/ogulcan.m3u8"
           />
           <p class="field-help">Update this to your own CloudFront or ingest server URL. Value is cached locally.</p>
           <button type="submit">Start Stream</button>
@@ -167,7 +168,7 @@
       frames: document.getElementById('metric-frames'),
     };
 
-    const DEFAULT_STREAM = 'https://live.ogulcanaydogan.com/live/ogulcan/index.m3u8';
+    const DEFAULT_STREAM = 'https://stream.ogulcanaydogan.com/hls/ogulcan.m3u8';
     const savedStream = localStorage.getItem('gopro-hls-url');
     const params = new URLSearchParams(window.location.search);
     const previewMode = params.get('preview') === 'true';
@@ -471,6 +472,13 @@
       }
     }
 
+    // Escape HTML to prevent XSS attacks
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
     function renderChat() {
       if (!chatFeed) return;
       chatFeed.innerHTML = '';
@@ -478,7 +486,10 @@
         const row = document.createElement('div');
         row.className = 'chat-row';
         const time = new Date(msg.ts).toLocaleTimeString();
-        row.innerHTML = `<span class="chat-name">${msg.name}</span><span class="chat-text">${msg.text}</span><span class="chat-time">${time}</span>`;
+        // Use escapeHtml to prevent XSS from user input
+        const safeName = escapeHtml(msg.name);
+        const safeText = escapeHtml(msg.text);
+        row.innerHTML = `<span class="chat-name">${safeName}</span><span class="chat-text">${safeText}</span><span class="chat-time">${time}</span>`;
         chatFeed.appendChild(row);
       });
       chatFeed.scrollTop = chatFeed.scrollHeight;

@@ -13,16 +13,43 @@ Your personal GoPro Hero 7 Black live streaming setup with HTTPS support.
 
 ---
 
+## ⚙️ Configuration
+
+**First time setup - copy the example config:**
+```bash
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
+```
+
+**Environment variables for start-server.sh:**
+```bash
+# Set your SSH key path (defaults to ~/.ssh/gopro-rtmp.pem)
+export SSH_KEY_PATH=~/Downloads/mac25.pem
+
+# Optional: customize domain and stream key
+export RTMP_DOMAIN=stream.example.com
+export STREAM_KEY=your-unique-key
+export ADMIN_EMAIL=you@example.com
+```
+
+---
+
 ## 🚀 How to Stream (Quick Version)
 
 ### Before Your Event:
 
 **1. Start the RTMP server** (Friday or Saturday before Sunday stream):
 ```bash
-cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
-terraform apply -var="deploy_rtmp_server=true" -auto-approve
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream
+./start-server.sh
 ```
-Wait ~2 minutes for the server to start.
+Wait ~5 minutes. The script will automatically:
+- Start the EC2 server
+- Configure Nginx with RTMP
+- Set up SSL certificate for HTTPS
+- Update DNS automatically
+- Show you all URLs when ready
 
 ### On Sunday at the Pub:
 
@@ -46,8 +73,8 @@ Wait ~2 minutes for the server to start.
 
 **5. Stop the server** (saves ~$15/month):
 ```bash
-cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
-terraform apply -var="deploy_rtmp_server=false" -auto-approve
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream
+./stop-server.sh
 ```
 
 ---
@@ -67,10 +94,17 @@ terraform apply -var="deploy_rtmp_server=false" -auto-approve
 
 #### Day Before (Friday/Saturday):
 ```bash
-cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
-terraform apply -var="deploy_rtmp_server=true" -auto-approve
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream
+./start-server.sh
 ```
-This starts your RTMP server. Takes ~2 minutes.
+This starts your RTMP server and configures everything automatically. Takes ~5 minutes total.
+
+The script will:
+- Create EC2 server with new IP address
+- Update DNS to point stream.ogulcanaydogan.com to new IP
+- Install and configure Nginx with RTMP module
+- Set up Let's Encrypt SSL certificate for HTTPS
+- Display all URLs when ready
 
 #### During Your Event:
 1. **Connect GoPro to iPhone** via GoPro Quik app
@@ -86,10 +120,10 @@ This starts your RTMP server. Takes ~2 minutes.
 
 #### After Streaming:
 ```bash
-cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
-terraform apply -var="deploy_rtmp_server=false" -auto-approve
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream
+./stop-server.sh
 ```
-This stops the server and saves money.
+This stops the server and saves money. Server will be completely destroyed (no charges).
 
 ---
 
@@ -98,9 +132,12 @@ This stops the server and saves money.
 **When Server is Running:**
 - EC2 t3.small: ~$0.50/day (~$15/month if left on)
 - Data transfer: ~$0.09/GB
+- No Elastic IP charges (using dynamic IP with automatic DNS updates)
 
 **When Server is Stopped:**
-- $0/month - Everything is deleted except DNS records
+- $0/month - Everything is deleted (EC2, security groups)
+- DNS records remain configured (no charge)
+- Just run `./start-server.sh` again when needed
 
 **Estimated Cost per Stream:**
 - 3-hour stream: ~$2-3 total
@@ -137,8 +174,8 @@ This stops the server and saves money.
 - **Reduce background apps** on iPhone
 
 ### "Server Not Found" Error
-- **Server might be stopped** - run the start command
-- **DNS not propagated yet** - wait 2-3 minutes after starting server
+- **Server might be stopped** - run `./start-server.sh`
+- **DNS not propagated yet** - the start script waits 3 minutes automatically
 - **Check server status:**
   ```bash
   cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
@@ -149,16 +186,17 @@ This stops the server and saves money.
 
 ## 📞 Quick Commands Reference
 
-### Start Server:
+### Start Server (Fully Automated):
 ```bash
-cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
-terraform apply -var="deploy_rtmp_server=true" -auto-approve
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream
+./start-server.sh
 ```
+Waits 5 minutes and configures everything automatically including SSL.
 
 ### Stop Server:
 ```bash
-cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
-terraform apply -var="deploy_rtmp_server=false" -auto-approve
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream
+./stop-server.sh
 ```
 
 ### Check Server Status:
@@ -207,8 +245,11 @@ curl -I https://stream.ogulcanaydogan.com/hls/ogulcan.m3u8
 ## 🔐 Security Notes
 
 - **HTTPS enabled** - all streaming is encrypted
-- **SSL certificate** auto-renews every 90 days
-- **No authentication** - anyone with the link can watch
+- **SSL certificate** auto-renews every 90 days (certbot timer enabled)
+- **RTMP stream key** - use a unique, hard-to-guess stream key in `terraform.tfvars`
+- **IP restrictions** - configure `rtmp_cidr_blocks` in `terraform.tfvars` to restrict who can publish
+- **Content Security Policy** - web player has CSP headers to prevent XSS attacks
+- **No viewer authentication** - anyone with the link can watch
   - Keep your stream URL private if you don't want public access
   - Or share it publicly - up to you!
 
@@ -235,7 +276,13 @@ Viewers' Browsers
 
 **SSH to server** (if needed for debugging):
 ```bash
-ssh -i ~/Downloads/mac25.pem ubuntu@3.230.37.216
+# Get current server IP first
+cd ~/Desktop/ogulcanaydogan/gopro-live-stream/infra
+terraform output rtmp_server_ip
+
+# Then SSH using IP (use the same key path you configured for start-server.sh)
+SSH_KEY_PATH=~/.ssh/gopro-rtmp.pem  # or ~/Downloads/mac25.pem
+ssh -i $SSH_KEY_PATH -o StrictHostKeyChecking=no -F /dev/null ubuntu@<SERVER_IP>
 ```
 
 **Check Nginx status:**
@@ -264,20 +311,24 @@ sudo systemctl restart nginx
 ## 📝 Technical Details
 
 - **Server:** Ubuntu 22.04 on AWS EC2 t3.small
-- **RTMP Server:** Nginx with RTMP module
-- **SSL/TLS:** Let's Encrypt (auto-renewing)
+- **RTMP Server:** Nginx with RTMP module (automatically configured)
+- **SSL/TLS:** Let's Encrypt (obtained automatically on each start)
 - **HLS Settings:** 2-second fragments, 10-second playlist
 - **Latency:** ~10-15 seconds (typical for HLS)
 - **Max viewers:** ~50-100 concurrent (can scale up if needed)
+- **DNS:** Automatic updates via Terraform (Route53 with 60s TTL)
+- **IP Address:** Changes on each deployment, DNS auto-updates
+- **Cost Savings:** No Elastic IP charges (~$3.60/month saved)
 
 ---
 
 ## ✅ Pre-Stream Checklist
 
 **Friday/Saturday:**
-- [ ] Start the RTMP server
+- [ ] Run `./start-server.sh` and wait 5 minutes
+- [ ] Script will confirm when ready with all URLs
 - [ ] Test by doing a 30-second stream
-- [ ] Verify viewer link works
+- [ ] Verify viewer link works (https://live.ogulcanaydogan.com)
 
 **Sunday Morning:**
 - [ ] Charge GoPro fully
@@ -293,7 +344,7 @@ sudo systemctl restart nginx
 
 **After Stream:**
 - [ ] Stop streaming in GoPro Quik
-- [ ] Stop the server to save money
+- [ ] Run `./stop-server.sh` to save money
 - [ ] Download any recordings from GoPro if needed
 
 ---

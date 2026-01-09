@@ -1,0 +1,19 @@
+# Copy this file to terraform.tfvars and fill in your values
+# IMPORTANT: Never commit terraform.tfvars to version control
+
+# S3/CloudFront Configuration
+bucket_name           = "live.example.com"
+domain_name           = "live.example.com"
+acm_certificate_arn   = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERT_ID"
+environment           = "prod"
+
+# RTMP Server Configuration
+deploy_rtmp_server    = true
+key_name              = "your-ssh-key-name"
+instance_type         = "t3.small"
+ssh_cidr_blocks       = ["YOUR_IP/32"]           # Restrict to your IP
+rtmp_cidr_blocks      = ["YOUR_IP/32"]           # Restrict RTMP publishing to your IP
+route53_zone_id       = "YOUR_ZONE_ID"
+rtmp_domain_name      = "stream.example.com"
+rtmp_stream_key       = "your-unique-stream-key"  # Use a hard-to-guess value
+admin_email           = "admin@example.com"       # For SSL certificate notifications

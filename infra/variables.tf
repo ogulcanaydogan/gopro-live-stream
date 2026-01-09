@@ -72,3 +72,34 @@ variable "ssh_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"] # Restrict this in production!
 }
+
+variable "rtmp_cidr_blocks" {
+  description = "CIDR blocks allowed to publish RTMP streams (restrict to your IP for security)"
+  type        = list(string)
+  default     = ["0.0.0.0/0"] # WARNING: Open to all by default. Restrict in production!
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID for automatic DNS updates"
+  type        = string
+  default     = ""
+}
+
+variable "rtmp_domain_name" {
+  description = "Domain name for RTMP server (e.g., stream.example.com)"
+  type        = string
+  default     = ""
+}
+
+variable "rtmp_stream_key" {
+  description = "Stream key for RTMP authentication (use a unique, hard-to-guess value)"
+  type        = string
+  default     = "gopro"
+  sensitive   = true
+}
+
+variable "admin_email" {
+  description = "Email address for SSL certificate notifications"
+  type        = string
+  default     = ""
+}

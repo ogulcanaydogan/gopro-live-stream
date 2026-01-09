@@ -1,6 +1,15 @@
 #!/bin/bash
+# Check ACM certificate status
+# Usage: ./check-cert-status.sh [CERT_ARN]
+#   or set ACM_CERT_ARN environment variable
 
-CERT_ARN="arn:aws:acm:us-east-1:211125457564:certificate/5015a7f0-020c-4d98-84cc-58f1c163fbf6"
+CERT_ARN="${1:-${ACM_CERT_ARN:-}}"
+
+if [ -z "$CERT_ARN" ]; then
+    echo "Usage: ./check-cert-status.sh <certificate-arn>"
+    echo "  or set ACM_CERT_ARN environment variable"
+    exit 1
+fi
 
 echo "Monitoring ACM certificate status..."
 echo "Press Ctrl+C to stop"
